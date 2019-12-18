@@ -1,0 +1,97 @@
+【分布式】
+
+课件http://jkx.fudan.edu.cn/COMP130123.html
+12月18日：final project presentation
+12月25日：final exam
+
+1. actor模型（分布式框架）？可能是用scala写的？
+2. 测试程序search：高并发压力测试
+
+TODO：
+- [x] 最普通的inverted index
+- [ ] tf+df
+- [ ] 计算出tfidf？
+- [ ] 再加上positional信息
+- [ ] 把单词+频次作为key，可以获得按照每个单词都按照频次排序的结果（二次排序）
+- [ ] 做索引压缩(如果按照id排序的话可以：后面的减前面的，也可以按照频次排序，position信息也可以后面减前面，过滤掉无效的词，)
+- [ ] 做检索：每个文章对应xml的偏移量，根据id可以取出整个文章（建索引）。还可以看下有没redirect的网址，根据id取出对应的网站（可以用redis！）
+- [ ] 可以把数据分开存在不同的slaves中，然后master来决定要从哪个机器中取数据，可以用redis，分布式存储在内存中，只要给key，就可以返回对应value
+
+查看运行中的job
+hadoop job -list
+
+yarn现实节点情况
+yarn node -list -all
+
+datanode/slaves的文件系统/dev/sda1，大小16G，占用百分比不能太大，有时候因为hadoop文件夹内的废物太多了，会把这个文件系统撑爆，使得节点变成unhealthy。这时候要把节点的hadoop整个删除，重新从master那里复制hadoop过去（正常为2.1G）
+
+df -h查看整体硬盘情况
+du -h --max-depth=1查看当前目录的大小
+
+放到服务器上跑的时候，要去掉package行！！！！！！！
+
+TODO：
+1. 放到服务器上会fail？
+2. 考虑一下停用词的去除！也可以分行存？spill操作，写入硬盘，防止内存溢出？
+3. 还有总的文档数量？另一个job求
+
+1. 打包jar：
+
+/usr/hadoop-2.6.4/bin/hadoop com.sun.tools.javac.Main WordCount.java
+javac -d . j1.java j2.java j3.java
+hadoop com.sun.tools.javac.Main XmlInputFormat.java InvertedIndex.java -d .
+
+hadoop com.sun.tools.javac.Main PosKeyID.java XmlInputFormat.java -d .
+
+hadoop com.sun.tools.javac.Main Lossless.java XmlInputFormat.java -d .
+
+jar cf wc.jar WordCount*.class
+jar cf ii.jar *.class
+
+2. hdfs上mkdir创建input文件夹，put放输入文件，cat检查
+
+hadoop fs -mkdir  /user/u16307130194/wordcount/input
+hadoop fs -put file01.txt /user/u16307130194/wordcount/input
+
+3. 运行,redirect输出
+
+/usr/hadoop-2.6.4/bin/hadoop jar wc.jar WordCount /user/u16307130194/wordcount/input/file01.txt /user/u16307130194/wordcount/output >run_log01.txt
+
+hadoop fs -rm -r /user/u16307130194/invertedindex/output
+
+/usr/hadoop-2.6.4/bin/hadoop jar ii.jar InvertedIndex /user/u16307130194/invertedindex/input/file03.txt /user/u16307130194/invertedindex/output >run_log01.txt
+
+nohup /usr/hadoop-2.6.4/bin/hadoop jar ii.jar InvertedIndex /data/enwiki-20191101-pages-articles-multistream.xml /user/u16307130194/invertedindex/output >run_log01.txt
+
+nohup /usr/hadoop-2.6.4/bin/hadoop jar ii.jar InvertedIndex /user/u16307130194/invertedindex/input/enwiki-20191101-pages-articles-multistream24.xml /user/u16307130194/invertedindex/output >run_log01.txt
+
+nohup /usr/hadoop-2.6.4/bin/hadoop jar ii.jar PosKeyID /data/enwiki-20191101-pages-articles-multistream.xml /user/u16307130194/invertedindex/output >run_log01.txt
+
+nohup /usr/hadoop-2.6.4/bin/hadoop jar ii.jar Lossless /data/enwiki-20191101-pages-articles-multistream.xml /user/u16307130194/invertedindex/output >run_log01.txt
+
+hadoop fs -rm -r /user/root/output
+
+nohup /usr/hadoop-2.6.4/bin/hadoop jar ii.jar Lossless /data/enwiki-20191101-pages-articles-multistream.xml /user/root/output >run_log01.txt
+
+
+
+
+
+
+hadoop fs -rm -r /user/u16307130194/output_lossless
+
+nohup /usr/hadoop-2.6.4/bin/hadoop jar ii.jar Lossless /data/enwiki-20191101-pages-articles-multistream.xml /user/u16307130194/output_lossless >run_log00.txt
+
+hadoop fs -rm -r /user/u16307130194/output_search
+
+nohup /usr/hadoop-2.6.4/bin/hadoop jar si.jar SearchIndex /data/enwiki-20191101-pages-articles-multistream.xml /user/u16307130194/output_search >run_log00.txt
+
+4. cat看output，或者get下载output，然后删除output
+
+hadoop fs -cat /user/u16307130194/wordcount/output/part-r-00000
+hadoop fs -get /user/u16307130194/wordcount/output/ ./
+hadoop fs -rm -r /user/u16307130194/wordcount/output
+
+
+hadoop fs -get /user/u16307130194/invertedindex/output/ ./
+
